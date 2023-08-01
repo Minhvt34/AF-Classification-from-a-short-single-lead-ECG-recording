@@ -1,0 +1,1523 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "machine_shape": "hm",
+      "gpuType": "V100",
+      "mount_file_id": "1-fmV36xjxuqbDrBTfkWrVAJPW8y3lNus",
+      "authorship_tag": "ABX9TyO7JY2w1V7fGOIOyWEwMA2l",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    },
+    "accelerator": "GPU"
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/Minhvt34/AF-Classification-from-a-short-single-lead-ECG-recording/blob/main/On_cinc17\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 1,
+      "metadata": {
+        "id": "fozNy4GDcoEp"
+      },
+      "outputs": [],
+      "source": [
+        "from build_datasets import load_all, split, make_json"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import random"
+      ],
+      "metadata": {
+        "id": "k9nWUoPtfozt"
+      },
+      "execution_count": 2,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "!unzip /content/drive/MyDrive/DSA/data/training2017.zip -d ./data/training2017/"
+      ],
+      "metadata": {
+        "id": "ba10Z2JpgCvy"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "random.seed(2018)\n",
+        "\n",
+        "dev_frac = 0.1\n",
+        "data_path = \"./data/training2017/training2017/\"\n",
+        "dataset = load_all(data_path)\n",
+        "train, dev = split(dataset, dev_frac)\n",
+        "make_json(\"./data/saved_json/train.json\", train)\n",
+        "make_json(\"./data/saved_json/dev.json\", dev)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "gOZWqcAlfjwF",
+        "outputId": "e8c1a9f9-f8cd-4cc4-bce0-87935d3e205b"
+      },
+      "execution_count": 6,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "100%|██████████| 8528/8528 [00:01<00:00, 5573.75it/s]\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from __future__ import print_function\n",
+        "from __future__ import  division\n",
+        "from __future__ import absolute_import\n",
+        "\n",
+        "import json\n",
+        "import keras\n",
+        "import numpy\n",
+        "import os\n",
+        "import random\n",
+        "import time"
+      ],
+      "metadata": {
+        "id": "LQE10ho8g5kP"
+      },
+      "execution_count": 7,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from ecg import network\n",
+        "from ecg import load\n",
+        "from ecg import util"
+      ],
+      "metadata": {
+        "id": "8zXDJgr0g9t5"
+      },
+      "execution_count": 32,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "MAX_EPOCHS = 100\n",
+        "\n",
+        "def make_save_dir(dirname, experiment_name):\n",
+        "    start_time = str(int(time.time())) + '_' + str(random.randrange(1000))\n",
+        "    save_dir = os.path.join(dirname, experiment_name, start_time)\n",
+        "\n",
+        "    if not os.path.exists(save_dir):\n",
+        "        os.makedirs(save_dir)\n",
+        "    return save_dir\n",
+        "\n",
+        "def get_filename_for_saving(save_dir):\n",
+        "    return os.path.join(save_dir,\n",
+        "                        \"{epoch:03d}-{loss:.3f}-{accuracy:.3f}.hdf5\")"
+      ],
+      "metadata": {
+        "id": "6VsbXwSfg_bM"
+      },
+      "execution_count": 21,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "config_file_path = \"./config.json\"\n",
+        "params = json.load(open(config_file_path, 'r'))"
+      ],
+      "metadata": {
+        "id": "UYSN_Ws2hB_p"
+      },
+      "execution_count": 11,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "params[\"save_dir\"]"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 35
+        },
+        "id": "dd1Jiza3hZ7U",
+        "outputId": "3cc2574b-da19-45e3-e24c-90f8f7f7c116"
+      },
+      "execution_count": 12,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "'./saved_dir'"
+            ],
+            "application/vnd.google.colaboratory.intrinsic+json": {
+              "type": "string"
+            }
+          },
+          "metadata": {},
+          "execution_count": 12
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(\"Loading training set...\")\n",
+        "train = load.load_dataset(params['train'])\n",
+        "print(\"Loading dev set...\")\n",
+        "dev = load.load_dataset(params['dev'])\n",
+        "print(\"Building preprocessor...\")\n",
+        "preproc = load.Preproc(*train)\n",
+        "print(\"Training size: \" + str(len(train[0])) + \" examples.\")\n",
+        "print(\"Dev size: \" + str(len(dev[0])) + \" examples.\")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "L6A7PngAhepW",
+        "outputId": "19f27f8e-4be4-4481-bb26-dc32d8825049"
+      },
+      "execution_count": 13,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Loading training set...\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "100%|██████████| 7676/7676 [00:01<00:00, 5641.32it/s]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Loading dev set...\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "100%|██████████| 852/852 [00:00<00:00, 5790.60it/s]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Building preprocessor...\n",
+            "Training size: 7676 examples.\n",
+            "Dev size: 852 examples.\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# EDA"
+      ],
+      "metadata": {
+        "id": "ukhPXOCj6R-M"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "def rhythms_per_patient(data_json):\n",
+        "    rhythms_patients = collections.defaultdict(set)\n",
+        "    with open(data_json, 'r') as fid:\n",
+        "        examples = [json.loads(l) for l in fid]\n",
+        "    for ex in examples:\n",
+        "        pid = os.path.basename(ex['ecg']).split(\"_\")[0]\n",
+        "        for l in ex['labels']:\n",
+        "            rhythms_patients[l].add(pid)\n",
+        "    rs = sorted(rhythms_patients.keys())\n",
+        "    for r in rs:\n",
+        "        print(\"{:>10} {}\".format(r, len(rhythms_patients[r])))"
+      ],
+      "metadata": {
+        "id": "Ge4iZbVW6Vgy"
+      },
+      "execution_count": 43,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(\"Training set\")\n",
+        "rhythms_per_patient(\"./data/saved_json/train.json\")\n",
+        "print(\"Testing set\")\n",
+        "rhythms_per_patient(\"./data/saved_json/dev.json\")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "RQ_rWWyp6aks",
+        "outputId": "356ad413-26d3-4e51-f062-f2a41f14398e"
+      },
+      "execution_count": 45,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Training set\n",
+            "         A 686\n",
+            "         N 4590\n",
+            "         O 2156\n",
+            "         ~ 244\n",
+            "Testing set\n",
+            "         A 72\n",
+            "         N 486\n",
+            "         O 259\n",
+            "         ~ 35\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Model config"
+      ],
+      "metadata": {
+        "id": "5txeoL6a6rIV"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "save_dir = make_save_dir(params['save_dir'], \"experiment\")\n",
+        "\n",
+        "util.save(preproc, save_dir)\n",
+        "\n",
+        "params.update({\n",
+        "    \"input_shape\": [None, 1],\n",
+        "    \"num_categories\": len(preproc.classes)\n",
+        "})"
+      ],
+      "metadata": {
+        "id": "o0I12s-4hiet"
+      },
+      "execution_count": 15,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "model = network.build_network(**params)\n",
+        "\n",
+        "stopping = keras.callbacks.EarlyStopping(patience=8)\n",
+        "\n",
+        "reduce_lr = keras.callbacks.ReduceLROnPlateau(\n",
+        "    factor=0.1,\n",
+        "    patience=2,\n",
+        "    min_lr=params[\"learning_rate\"] * 0.001)\n",
+        "\n",
+        "checkpointer = keras.callbacks.ModelCheckpoint(\n",
+        "    filepath=get_filename_for_saving(save_dir),\n",
+        "    save_best_only=False)\n",
+        "\n",
+        "batch_size = params.get(\"batch_size\", 32)"
+      ],
+      "metadata": {
+        "id": "yY-E8auThtk4"
+      },
+      "execution_count": 22,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "model.summary()"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "LfaKu6luDNph",
+        "outputId": "79d0be40-ef8a-42c1-c70e-9e4d5dc6c7f9"
+      },
+      "execution_count": 64,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Model: \"model_2\"\n",
+            "__________________________________________________________________________________________________\n",
+            " Layer (type)                   Output Shape         Param #     Connected to                     \n",
+            "==================================================================================================\n",
+            " inputs (InputLayer)            [(None, None, 1)]    0           []                               \n",
+            "                                                                                                  \n",
+            " conv1d_66 (Conv1D)             (None, None, 32)     544         ['inputs[0][0]']                 \n",
+            "                                                                                                  \n",
+            " batch_normalization_66 (BatchN  (None, None, 32)    128         ['conv1d_66[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_68 (Activation)     (None, None, 32)     0           ['batch_normalization_66[0][0]'] \n",
+            "                                                                                                  \n",
+            " conv1d_67 (Conv1D)             (None, None, 32)     16416       ['activation_68[0][0]']          \n",
+            "                                                                                                  \n",
+            " batch_normalization_67 (BatchN  (None, None, 32)    128         ['conv1d_67[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_69 (Activation)     (None, None, 32)     0           ['batch_normalization_67[0][0]'] \n",
+            "                                                                                                  \n",
+            " dropout_32 (Dropout)           (None, None, 32)     0           ['activation_69[0][0]']          \n",
+            "                                                                                                  \n",
+            " max_pooling1d_32 (MaxPooling1D  (None, None, 32)    0           ['activation_68[0][0]']          \n",
+            " )                                                                                                \n",
+            "                                                                                                  \n",
+            " conv1d_68 (Conv1D)             (None, None, 32)     16416       ['dropout_32[0][0]']             \n",
+            "                                                                                                  \n",
+            " add_32 (Add)                   (None, None, 32)     0           ['max_pooling1d_32[0][0]',       \n",
+            "                                                                  'conv1d_68[0][0]']              \n",
+            "                                                                                                  \n",
+            " batch_normalization_68 (BatchN  (None, None, 32)    128         ['add_32[0][0]']                 \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_70 (Activation)     (None, None, 32)     0           ['batch_normalization_68[0][0]'] \n",
+            "                                                                                                  \n",
+            " conv1d_69 (Conv1D)             (None, None, 32)     16416       ['activation_70[0][0]']          \n",
+            "                                                                                                  \n",
+            " batch_normalization_69 (BatchN  (None, None, 32)    128         ['conv1d_69[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_71 (Activation)     (None, None, 32)     0           ['batch_normalization_69[0][0]'] \n",
+            "                                                                                                  \n",
+            " dropout_33 (Dropout)           (None, None, 32)     0           ['activation_71[0][0]']          \n",
+            "                                                                                                  \n",
+            " max_pooling1d_33 (MaxPooling1D  (None, None, 32)    0           ['add_32[0][0]']                 \n",
+            " )                                                                                                \n",
+            "                                                                                                  \n",
+            " conv1d_70 (Conv1D)             (None, None, 32)     16416       ['dropout_33[0][0]']             \n",
+            "                                                                                                  \n",
+            " add_33 (Add)                   (None, None, 32)     0           ['max_pooling1d_33[0][0]',       \n",
+            "                                                                  'conv1d_70[0][0]']              \n",
+            "                                                                                                  \n",
+            " batch_normalization_70 (BatchN  (None, None, 32)    128         ['add_33[0][0]']                 \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_72 (Activation)     (None, None, 32)     0           ['batch_normalization_70[0][0]'] \n",
+            "                                                                                                  \n",
+            " conv1d_71 (Conv1D)             (None, None, 32)     16416       ['activation_72[0][0]']          \n",
+            "                                                                                                  \n",
+            " batch_normalization_71 (BatchN  (None, None, 32)    128         ['conv1d_71[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_73 (Activation)     (None, None, 32)     0           ['batch_normalization_71[0][0]'] \n",
+            "                                                                                                  \n",
+            " dropout_34 (Dropout)           (None, None, 32)     0           ['activation_73[0][0]']          \n",
+            "                                                                                                  \n",
+            " max_pooling1d_34 (MaxPooling1D  (None, None, 32)    0           ['add_33[0][0]']                 \n",
+            " )                                                                                                \n",
+            "                                                                                                  \n",
+            " conv1d_72 (Conv1D)             (None, None, 32)     16416       ['dropout_34[0][0]']             \n",
+            "                                                                                                  \n",
+            " add_34 (Add)                   (None, None, 32)     0           ['max_pooling1d_34[0][0]',       \n",
+            "                                                                  'conv1d_72[0][0]']              \n",
+            "                                                                                                  \n",
+            " batch_normalization_72 (BatchN  (None, None, 32)    128         ['add_34[0][0]']                 \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_74 (Activation)     (None, None, 32)     0           ['batch_normalization_72[0][0]'] \n",
+            "                                                                                                  \n",
+            " conv1d_73 (Conv1D)             (None, None, 32)     16416       ['activation_74[0][0]']          \n",
+            "                                                                                                  \n",
+            " batch_normalization_73 (BatchN  (None, None, 32)    128         ['conv1d_73[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_75 (Activation)     (None, None, 32)     0           ['batch_normalization_73[0][0]'] \n",
+            "                                                                                                  \n",
+            " dropout_35 (Dropout)           (None, None, 32)     0           ['activation_75[0][0]']          \n",
+            "                                                                                                  \n",
+            " max_pooling1d_35 (MaxPooling1D  (None, None, 32)    0           ['add_34[0][0]']                 \n",
+            " )                                                                                                \n",
+            "                                                                                                  \n",
+            " conv1d_74 (Conv1D)             (None, None, 32)     16416       ['dropout_35[0][0]']             \n",
+            "                                                                                                  \n",
+            " add_35 (Add)                   (None, None, 32)     0           ['max_pooling1d_35[0][0]',       \n",
+            "                                                                  'conv1d_74[0][0]']              \n",
+            "                                                                                                  \n",
+            " batch_normalization_74 (BatchN  (None, None, 32)    128         ['add_35[0][0]']                 \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_76 (Activation)     (None, None, 32)     0           ['batch_normalization_74[0][0]'] \n",
+            "                                                                                                  \n",
+            " conv1d_75 (Conv1D)             (None, None, 64)     32832       ['activation_76[0][0]']          \n",
+            "                                                                                                  \n",
+            " batch_normalization_75 (BatchN  (None, None, 64)    256         ['conv1d_75[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_77 (Activation)     (None, None, 64)     0           ['batch_normalization_75[0][0]'] \n",
+            "                                                                                                  \n",
+            " max_pooling1d_36 (MaxPooling1D  (None, None, 32)    0           ['add_35[0][0]']                 \n",
+            " )                                                                                                \n",
+            "                                                                                                  \n",
+            " dropout_36 (Dropout)           (None, None, 64)     0           ['activation_77[0][0]']          \n",
+            "                                                                                                  \n",
+            " lambda_6 (Lambda)              (None, None, 64)     0           ['max_pooling1d_36[0][0]']       \n",
+            "                                                                                                  \n",
+            " conv1d_76 (Conv1D)             (None, None, 64)     65600       ['dropout_36[0][0]']             \n",
+            "                                                                                                  \n",
+            " add_36 (Add)                   (None, None, 64)     0           ['lambda_6[0][0]',               \n",
+            "                                                                  'conv1d_76[0][0]']              \n",
+            "                                                                                                  \n",
+            " batch_normalization_76 (BatchN  (None, None, 64)    256         ['add_36[0][0]']                 \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_78 (Activation)     (None, None, 64)     0           ['batch_normalization_76[0][0]'] \n",
+            "                                                                                                  \n",
+            " conv1d_77 (Conv1D)             (None, None, 64)     65600       ['activation_78[0][0]']          \n",
+            "                                                                                                  \n",
+            " batch_normalization_77 (BatchN  (None, None, 64)    256         ['conv1d_77[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_79 (Activation)     (None, None, 64)     0           ['batch_normalization_77[0][0]'] \n",
+            "                                                                                                  \n",
+            " dropout_37 (Dropout)           (None, None, 64)     0           ['activation_79[0][0]']          \n",
+            "                                                                                                  \n",
+            " max_pooling1d_37 (MaxPooling1D  (None, None, 64)    0           ['add_36[0][0]']                 \n",
+            " )                                                                                                \n",
+            "                                                                                                  \n",
+            " conv1d_78 (Conv1D)             (None, None, 64)     65600       ['dropout_37[0][0]']             \n",
+            "                                                                                                  \n",
+            " add_37 (Add)                   (None, None, 64)     0           ['max_pooling1d_37[0][0]',       \n",
+            "                                                                  'conv1d_78[0][0]']              \n",
+            "                                                                                                  \n",
+            " batch_normalization_78 (BatchN  (None, None, 64)    256         ['add_37[0][0]']                 \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_80 (Activation)     (None, None, 64)     0           ['batch_normalization_78[0][0]'] \n",
+            "                                                                                                  \n",
+            " conv1d_79 (Conv1D)             (None, None, 64)     65600       ['activation_80[0][0]']          \n",
+            "                                                                                                  \n",
+            " batch_normalization_79 (BatchN  (None, None, 64)    256         ['conv1d_79[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_81 (Activation)     (None, None, 64)     0           ['batch_normalization_79[0][0]'] \n",
+            "                                                                                                  \n",
+            " dropout_38 (Dropout)           (None, None, 64)     0           ['activation_81[0][0]']          \n",
+            "                                                                                                  \n",
+            " max_pooling1d_38 (MaxPooling1D  (None, None, 64)    0           ['add_37[0][0]']                 \n",
+            " )                                                                                                \n",
+            "                                                                                                  \n",
+            " conv1d_80 (Conv1D)             (None, None, 64)     65600       ['dropout_38[0][0]']             \n",
+            "                                                                                                  \n",
+            " add_38 (Add)                   (None, None, 64)     0           ['max_pooling1d_38[0][0]',       \n",
+            "                                                                  'conv1d_80[0][0]']              \n",
+            "                                                                                                  \n",
+            " batch_normalization_80 (BatchN  (None, None, 64)    256         ['add_38[0][0]']                 \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_82 (Activation)     (None, None, 64)     0           ['batch_normalization_80[0][0]'] \n",
+            "                                                                                                  \n",
+            " conv1d_81 (Conv1D)             (None, None, 64)     65600       ['activation_82[0][0]']          \n",
+            "                                                                                                  \n",
+            " batch_normalization_81 (BatchN  (None, None, 64)    256         ['conv1d_81[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_83 (Activation)     (None, None, 64)     0           ['batch_normalization_81[0][0]'] \n",
+            "                                                                                                  \n",
+            " dropout_39 (Dropout)           (None, None, 64)     0           ['activation_83[0][0]']          \n",
+            "                                                                                                  \n",
+            " max_pooling1d_39 (MaxPooling1D  (None, None, 64)    0           ['add_38[0][0]']                 \n",
+            " )                                                                                                \n",
+            "                                                                                                  \n",
+            " conv1d_82 (Conv1D)             (None, None, 64)     65600       ['dropout_39[0][0]']             \n",
+            "                                                                                                  \n",
+            " add_39 (Add)                   (None, None, 64)     0           ['max_pooling1d_39[0][0]',       \n",
+            "                                                                  'conv1d_82[0][0]']              \n",
+            "                                                                                                  \n",
+            " batch_normalization_82 (BatchN  (None, None, 64)    256         ['add_39[0][0]']                 \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_84 (Activation)     (None, None, 64)     0           ['batch_normalization_82[0][0]'] \n",
+            "                                                                                                  \n",
+            " conv1d_83 (Conv1D)             (None, None, 128)    131200      ['activation_84[0][0]']          \n",
+            "                                                                                                  \n",
+            " batch_normalization_83 (BatchN  (None, None, 128)   512         ['conv1d_83[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_85 (Activation)     (None, None, 128)    0           ['batch_normalization_83[0][0]'] \n",
+            "                                                                                                  \n",
+            " max_pooling1d_40 (MaxPooling1D  (None, None, 64)    0           ['add_39[0][0]']                 \n",
+            " )                                                                                                \n",
+            "                                                                                                  \n",
+            " dropout_40 (Dropout)           (None, None, 128)    0           ['activation_85[0][0]']          \n",
+            "                                                                                                  \n",
+            " lambda_7 (Lambda)              (None, None, 128)    0           ['max_pooling1d_40[0][0]']       \n",
+            "                                                                                                  \n",
+            " conv1d_84 (Conv1D)             (None, None, 128)    262272      ['dropout_40[0][0]']             \n",
+            "                                                                                                  \n",
+            " add_40 (Add)                   (None, None, 128)    0           ['lambda_7[0][0]',               \n",
+            "                                                                  'conv1d_84[0][0]']              \n",
+            "                                                                                                  \n",
+            " batch_normalization_84 (BatchN  (None, None, 128)   512         ['add_40[0][0]']                 \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_86 (Activation)     (None, None, 128)    0           ['batch_normalization_84[0][0]'] \n",
+            "                                                                                                  \n",
+            " conv1d_85 (Conv1D)             (None, None, 128)    262272      ['activation_86[0][0]']          \n",
+            "                                                                                                  \n",
+            " batch_normalization_85 (BatchN  (None, None, 128)   512         ['conv1d_85[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_87 (Activation)     (None, None, 128)    0           ['batch_normalization_85[0][0]'] \n",
+            "                                                                                                  \n",
+            " dropout_41 (Dropout)           (None, None, 128)    0           ['activation_87[0][0]']          \n",
+            "                                                                                                  \n",
+            " max_pooling1d_41 (MaxPooling1D  (None, None, 128)   0           ['add_40[0][0]']                 \n",
+            " )                                                                                                \n",
+            "                                                                                                  \n",
+            " conv1d_86 (Conv1D)             (None, None, 128)    262272      ['dropout_41[0][0]']             \n",
+            "                                                                                                  \n",
+            " add_41 (Add)                   (None, None, 128)    0           ['max_pooling1d_41[0][0]',       \n",
+            "                                                                  'conv1d_86[0][0]']              \n",
+            "                                                                                                  \n",
+            " batch_normalization_86 (BatchN  (None, None, 128)   512         ['add_41[0][0]']                 \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_88 (Activation)     (None, None, 128)    0           ['batch_normalization_86[0][0]'] \n",
+            "                                                                                                  \n",
+            " conv1d_87 (Conv1D)             (None, None, 128)    262272      ['activation_88[0][0]']          \n",
+            "                                                                                                  \n",
+            " batch_normalization_87 (BatchN  (None, None, 128)   512         ['conv1d_87[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_89 (Activation)     (None, None, 128)    0           ['batch_normalization_87[0][0]'] \n",
+            "                                                                                                  \n",
+            " dropout_42 (Dropout)           (None, None, 128)    0           ['activation_89[0][0]']          \n",
+            "                                                                                                  \n",
+            " max_pooling1d_42 (MaxPooling1D  (None, None, 128)   0           ['add_41[0][0]']                 \n",
+            " )                                                                                                \n",
+            "                                                                                                  \n",
+            " conv1d_88 (Conv1D)             (None, None, 128)    262272      ['dropout_42[0][0]']             \n",
+            "                                                                                                  \n",
+            " add_42 (Add)                   (None, None, 128)    0           ['max_pooling1d_42[0][0]',       \n",
+            "                                                                  'conv1d_88[0][0]']              \n",
+            "                                                                                                  \n",
+            " batch_normalization_88 (BatchN  (None, None, 128)   512         ['add_42[0][0]']                 \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_90 (Activation)     (None, None, 128)    0           ['batch_normalization_88[0][0]'] \n",
+            "                                                                                                  \n",
+            " conv1d_89 (Conv1D)             (None, None, 128)    262272      ['activation_90[0][0]']          \n",
+            "                                                                                                  \n",
+            " batch_normalization_89 (BatchN  (None, None, 128)   512         ['conv1d_89[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_91 (Activation)     (None, None, 128)    0           ['batch_normalization_89[0][0]'] \n",
+            "                                                                                                  \n",
+            " dropout_43 (Dropout)           (None, None, 128)    0           ['activation_91[0][0]']          \n",
+            "                                                                                                  \n",
+            " max_pooling1d_43 (MaxPooling1D  (None, None, 128)   0           ['add_42[0][0]']                 \n",
+            " )                                                                                                \n",
+            "                                                                                                  \n",
+            " conv1d_90 (Conv1D)             (None, None, 128)    262272      ['dropout_43[0][0]']             \n",
+            "                                                                                                  \n",
+            " add_43 (Add)                   (None, None, 128)    0           ['max_pooling1d_43[0][0]',       \n",
+            "                                                                  'conv1d_90[0][0]']              \n",
+            "                                                                                                  \n",
+            " batch_normalization_90 (BatchN  (None, None, 128)   512         ['add_43[0][0]']                 \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_92 (Activation)     (None, None, 128)    0           ['batch_normalization_90[0][0]'] \n",
+            "                                                                                                  \n",
+            " conv1d_91 (Conv1D)             (None, None, 256)    524544      ['activation_92[0][0]']          \n",
+            "                                                                                                  \n",
+            " batch_normalization_91 (BatchN  (None, None, 256)   1024        ['conv1d_91[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_93 (Activation)     (None, None, 256)    0           ['batch_normalization_91[0][0]'] \n",
+            "                                                                                                  \n",
+            " max_pooling1d_44 (MaxPooling1D  (None, None, 128)   0           ['add_43[0][0]']                 \n",
+            " )                                                                                                \n",
+            "                                                                                                  \n",
+            " dropout_44 (Dropout)           (None, None, 256)    0           ['activation_93[0][0]']          \n",
+            "                                                                                                  \n",
+            " lambda_8 (Lambda)              (None, None, 256)    0           ['max_pooling1d_44[0][0]']       \n",
+            "                                                                                                  \n",
+            " conv1d_92 (Conv1D)             (None, None, 256)    1048832     ['dropout_44[0][0]']             \n",
+            "                                                                                                  \n",
+            " add_44 (Add)                   (None, None, 256)    0           ['lambda_8[0][0]',               \n",
+            "                                                                  'conv1d_92[0][0]']              \n",
+            "                                                                                                  \n",
+            " batch_normalization_92 (BatchN  (None, None, 256)   1024        ['add_44[0][0]']                 \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_94 (Activation)     (None, None, 256)    0           ['batch_normalization_92[0][0]'] \n",
+            "                                                                                                  \n",
+            " conv1d_93 (Conv1D)             (None, None, 256)    1048832     ['activation_94[0][0]']          \n",
+            "                                                                                                  \n",
+            " batch_normalization_93 (BatchN  (None, None, 256)   1024        ['conv1d_93[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_95 (Activation)     (None, None, 256)    0           ['batch_normalization_93[0][0]'] \n",
+            "                                                                                                  \n",
+            " dropout_45 (Dropout)           (None, None, 256)    0           ['activation_95[0][0]']          \n",
+            "                                                                                                  \n",
+            " max_pooling1d_45 (MaxPooling1D  (None, None, 256)   0           ['add_44[0][0]']                 \n",
+            " )                                                                                                \n",
+            "                                                                                                  \n",
+            " conv1d_94 (Conv1D)             (None, None, 256)    1048832     ['dropout_45[0][0]']             \n",
+            "                                                                                                  \n",
+            " add_45 (Add)                   (None, None, 256)    0           ['max_pooling1d_45[0][0]',       \n",
+            "                                                                  'conv1d_94[0][0]']              \n",
+            "                                                                                                  \n",
+            " batch_normalization_94 (BatchN  (None, None, 256)   1024        ['add_45[0][0]']                 \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_96 (Activation)     (None, None, 256)    0           ['batch_normalization_94[0][0]'] \n",
+            "                                                                                                  \n",
+            " conv1d_95 (Conv1D)             (None, None, 256)    1048832     ['activation_96[0][0]']          \n",
+            "                                                                                                  \n",
+            " batch_normalization_95 (BatchN  (None, None, 256)   1024        ['conv1d_95[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_97 (Activation)     (None, None, 256)    0           ['batch_normalization_95[0][0]'] \n",
+            "                                                                                                  \n",
+            " dropout_46 (Dropout)           (None, None, 256)    0           ['activation_97[0][0]']          \n",
+            "                                                                                                  \n",
+            " max_pooling1d_46 (MaxPooling1D  (None, None, 256)   0           ['add_45[0][0]']                 \n",
+            " )                                                                                                \n",
+            "                                                                                                  \n",
+            " conv1d_96 (Conv1D)             (None, None, 256)    1048832     ['dropout_46[0][0]']             \n",
+            "                                                                                                  \n",
+            " add_46 (Add)                   (None, None, 256)    0           ['max_pooling1d_46[0][0]',       \n",
+            "                                                                  'conv1d_96[0][0]']              \n",
+            "                                                                                                  \n",
+            " batch_normalization_96 (BatchN  (None, None, 256)   1024        ['add_46[0][0]']                 \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_98 (Activation)     (None, None, 256)    0           ['batch_normalization_96[0][0]'] \n",
+            "                                                                                                  \n",
+            " conv1d_97 (Conv1D)             (None, None, 256)    1048832     ['activation_98[0][0]']          \n",
+            "                                                                                                  \n",
+            " batch_normalization_97 (BatchN  (None, None, 256)   1024        ['conv1d_97[0][0]']              \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_99 (Activation)     (None, None, 256)    0           ['batch_normalization_97[0][0]'] \n",
+            "                                                                                                  \n",
+            " dropout_47 (Dropout)           (None, None, 256)    0           ['activation_99[0][0]']          \n",
+            "                                                                                                  \n",
+            " max_pooling1d_47 (MaxPooling1D  (None, None, 256)   0           ['add_46[0][0]']                 \n",
+            " )                                                                                                \n",
+            "                                                                                                  \n",
+            " conv1d_98 (Conv1D)             (None, None, 256)    1048832     ['dropout_47[0][0]']             \n",
+            "                                                                                                  \n",
+            " add_47 (Add)                   (None, None, 256)    0           ['max_pooling1d_47[0][0]',       \n",
+            "                                                                  'conv1d_98[0][0]']              \n",
+            "                                                                                                  \n",
+            " batch_normalization_98 (BatchN  (None, None, 256)   1024        ['add_47[0][0]']                 \n",
+            " ormalization)                                                                                    \n",
+            "                                                                                                  \n",
+            " activation_100 (Activation)    (None, None, 256)    0           ['batch_normalization_98[0][0]'] \n",
+            "                                                                                                  \n",
+            " time_distributed_2 (TimeDistri  (None, None, 4)     1028        ['activation_100[0][0]']         \n",
+            " buted)                                                                                           \n",
+            "                                                                                                  \n",
+            " activation_101 (Activation)    (None, None, 4)      0           ['time_distributed_2[0][0]']     \n",
+            "                                                                                                  \n",
+            "==================================================================================================\n",
+            "Total params: 10,473,892\n",
+            "Trainable params: 10,466,148\n",
+            "Non-trainable params: 7,744\n",
+            "__________________________________________________________________________________________________\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "if params.get(\"generator\", False):\n",
+        "    train_gen = load.data_generator(batch_size, preproc, *train)\n",
+        "    dev_gen = load.data_generator(batch_size, preproc, *dev)\n",
+        "    model.fit_generator(\n",
+        "        train_gen,\n",
+        "        steps_per_epoch=int(len(train[0]) / batch_size),\n",
+        "        epochs=MAX_EPOCHS,\n",
+        "        validation_data=dev_gen,\n",
+        "        validation_steps=int(len(dev[0]) / batch_size),\n",
+        "        callbacks=[checkpointer, reduce_lr, stopping])\n",
+        "else:\n",
+        "    train_x, train_y = preproc.process(*train)\n",
+        "    dev_x, dev_y = preproc.process(*dev)\n",
+        "    model.fit(\n",
+        "        train_x, train_y,\n",
+        "        batch_size=batch_size,\n",
+        "        epochs=1,\n",
+        "        validation_data=(dev_x, dev_y),\n",
+        "        callbacks=[checkpointer, reduce_lr, stopping])"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "Mc08NfVFhvxn",
+        "outputId": "3139da3a-873c-4052-f969-4fa00da745e9"
+      },
+      "execution_count": 23,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch 1/100\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "<ipython-input-23-928acd268cff>:4: UserWarning: `Model.fit_generator` is deprecated and will be removed in a future version. Please use `Model.fit`, which supports generators.\n",
+            "  model.fit_generator(\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "239/239 [==============================] - 40s 114ms/step - loss: 0.8983 - accuracy: 0.6371 - val_loss: 4.8679 - val_accuracy: 0.4568 - lr: 0.0010\n",
+            "Epoch 2/100\n",
+            "239/239 [==============================] - 26s 109ms/step - loss: 0.6804 - accuracy: 0.7368 - val_loss: 0.9899 - val_accuracy: 0.6746 - lr: 0.0010\n",
+            "Epoch 3/100\n",
+            "239/239 [==============================] - 26s 109ms/step - loss: 0.5970 - accuracy: 0.7793 - val_loss: 0.6339 - val_accuracy: 0.7635 - lr: 0.0010\n",
+            "Epoch 4/100\n",
+            "239/239 [==============================] - 26s 108ms/step - loss: 0.5360 - accuracy: 0.8076 - val_loss: 0.5614 - val_accuracy: 0.8081 - lr: 0.0010\n",
+            "Epoch 5/100\n",
+            "239/239 [==============================] - 26s 108ms/step - loss: 0.4990 - accuracy: 0.8250 - val_loss: 0.4776 - val_accuracy: 0.8276 - lr: 0.0010\n",
+            "Epoch 6/100\n",
+            "239/239 [==============================] - 26s 109ms/step - loss: 0.4673 - accuracy: 0.8360 - val_loss: 0.4567 - val_accuracy: 0.8260 - lr: 0.0010\n",
+            "Epoch 7/100\n",
+            "239/239 [==============================] - 26s 109ms/step - loss: 0.4384 - accuracy: 0.8467 - val_loss: 0.4778 - val_accuracy: 0.8322 - lr: 0.0010\n",
+            "Epoch 8/100\n",
+            "239/239 [==============================] - 26s 109ms/step - loss: 0.4162 - accuracy: 0.8523 - val_loss: 0.4797 - val_accuracy: 0.8302 - lr: 0.0010\n",
+            "Epoch 9/100\n",
+            "239/239 [==============================] - 26s 109ms/step - loss: 0.3588 - accuracy: 0.8700 - val_loss: 0.4049 - val_accuracy: 0.8584 - lr: 1.0000e-04\n",
+            "Epoch 10/100\n",
+            "239/239 [==============================] - 26s 109ms/step - loss: 0.3262 - accuracy: 0.8842 - val_loss: 0.4085 - val_accuracy: 0.8551 - lr: 1.0000e-04\n",
+            "Epoch 11/100\n",
+            "239/239 [==============================] - 26s 108ms/step - loss: 0.3126 - accuracy: 0.8890 - val_loss: 0.4181 - val_accuracy: 0.8509 - lr: 1.0000e-04\n",
+            "Epoch 12/100\n",
+            "239/239 [==============================] - 26s 109ms/step - loss: 0.2932 - accuracy: 0.8956 - val_loss: 0.4101 - val_accuracy: 0.8584 - lr: 1.0000e-05\n",
+            "Epoch 13/100\n",
+            "239/239 [==============================] - 26s 108ms/step - loss: 0.2909 - accuracy: 0.8969 - val_loss: 0.4100 - val_accuracy: 0.8592 - lr: 1.0000e-05\n",
+            "Epoch 14/100\n",
+            "239/239 [==============================] - 26s 109ms/step - loss: 0.2865 - accuracy: 0.8991 - val_loss: 0.4104 - val_accuracy: 0.8597 - lr: 1.0000e-06\n",
+            "Epoch 15/100\n",
+            "239/239 [==============================] - 26s 109ms/step - loss: 0.2864 - accuracy: 0.8991 - val_loss: 0.4104 - val_accuracy: 0.8599 - lr: 1.0000e-06\n",
+            "Epoch 16/100\n",
+            "239/239 [==============================] - 26s 108ms/step - loss: 0.2864 - accuracy: 0.8981 - val_loss: 0.4103 - val_accuracy: 0.8599 - lr: 1.0000e-06\n",
+            "Epoch 17/100\n",
+            "239/239 [==============================] - 26s 108ms/step - loss: 0.2839 - accuracy: 0.9008 - val_loss: 0.4104 - val_accuracy: 0.8600 - lr: 1.0000e-06\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import collections\n",
+        "import scipy.stats as sst"
+      ],
+      "metadata": {
+        "id": "LywOtfeJrxUn"
+      },
+      "execution_count": 24,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Model evaluation"
+      ],
+      "metadata": {
+        "id": "q9_-Edts6vPq"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "model_checkpoint = \"/content/saved_dir/experiment/1690866990_142/009-0.359-0.870.hdf5\"\n",
+        "valid_data = \"./data/saved_json/dev.json\""
+      ],
+      "metadata": {
+        "id": "NBQFz2QE2r_d"
+      },
+      "execution_count": 25,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import _pickle as cPickle\n",
+        "\n",
+        "def _load_(dirname):\n",
+        "    preproc_f = os.path.join(dirname, \"preproc.bin\")\n",
+        "    with open(preproc_f, 'rb') as fid:\n",
+        "        preproc = cPickle.load(fid)\n",
+        "    return preproc"
+      ],
+      "metadata": {
+        "id": "2_6cJIgv4NTE"
+      },
+      "execution_count": 30,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "data = load.load_dataset(valid_data)\n",
+        "preproc = _load_(os.path.dirname(model_checkpoint))\n",
+        "model = keras.models.load_model(model_checkpoint)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "7amChEU93bxl",
+        "outputId": "185d47e5-8f7b-4015-837f-79b23902966f"
+      },
+      "execution_count": 34,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "100%|██████████| 852/852 [00:00<00:00, 6082.97it/s]\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import numpy as np"
+      ],
+      "metadata": {
+        "id": "tm8CeF0K4-b2"
+      },
+      "execution_count": 35,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "data_path = \"./data/saved_json/train.json\"\n",
+        "with open(data_path, 'rb') as fid:\n",
+        "    train_labels = [json.loads(l)['labels'] for l in fid]\n",
+        "counts = collections.Counter(preproc.class_to_int[l[0]] for l in train_labels)\n",
+        "counts = sorted(counts.most_common(), key=lambda x: x[0])\n",
+        "counts = list(zip(*counts))[1]\n",
+        "smooth = 500\n",
+        "counts = np.array(counts)[None, None, :]\n",
+        "total = np.sum(counts) + counts.shape[1]\n",
+        "prior = (counts + smooth) / float(total)"
+      ],
+      "metadata": {
+        "id": "Wym50a5o42CN"
+      },
+      "execution_count": 38,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "probs = []\n",
+        "labels = []\n",
+        "for x, y  in zip(*data):\n",
+        "    x, y = preproc.process([x], [y])\n",
+        "    probs.append(model.predict(x))\n",
+        "    labels.append(y)"
+      ],
+      "metadata": {
+        "id": "C-MZz7fD5Vg4"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "preds = []\n",
+        "ground_truth = []\n",
+        "for p, g in zip(probs, labels):\n",
+        "    preds.append(sst.mode(np.argmax(p / prior, axis=2).squeeze())[0][0])\n",
+        "    ground_truth.append(sst.mode(np.argmax(g, axis=2).squeeze())[0][0])"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "dRsrpshI5yR_",
+        "outputId": "efb3a963-6020-44f2-a1fb-907deb28fb01"
+      },
+      "execution_count": 40,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "<ipython-input-40-1b21dfdfe340>:4: FutureWarning: Unlike other reduction functions (e.g. `skew`, `kurtosis`), the default behavior of `mode` typically preserves the axis it acts along. In SciPy 1.11.0, this behavior will change: the default value of `keepdims` will become False, the `axis` over which the statistic is taken will be eliminated, and the value None will no longer be accepted. Set `keepdims` to True or False to avoid this warning.\n",
+            "  preds.append(sst.mode(np.argmax(p / prior, axis=2).squeeze())[0][0])\n",
+            "<ipython-input-40-1b21dfdfe340>:5: FutureWarning: Unlike other reduction functions (e.g. `skew`, `kurtosis`), the default behavior of `mode` typically preserves the axis it acts along. In SciPy 1.11.0, this behavior will change: the default value of `keepdims` will become False, the `axis` over which the statistic is taken will be eliminated, and the value None will no longer be accepted. Set `keepdims` to True or False to avoid this warning.\n",
+            "  ground_truth.append(sst.mode(np.argmax(g, axis=2).squeeze())[0][0])\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import sklearn.metrics as skm\n",
+        "report = skm.classification_report(\n",
+        "            ground_truth, preds,\n",
+        "            target_names=preproc.classes,\n",
+        "            digits=3)\n",
+        "scores = skm.precision_recall_fscore_support(\n",
+        "                    ground_truth,\n",
+        "                    preds,\n",
+        "                    average=None)\n",
+        "print(report)\n",
+        "print(\"CINC Average {:3f}\".format(np.mean(scores[2][:3])))"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "xXmvL0iJ54G1",
+        "outputId": "d00542a4-bc2e-42fa-93d9-db87971d3e3a"
+      },
+      "execution_count": 42,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "              precision    recall  f1-score   support\n",
+            "\n",
+            "           A      0.765     0.903     0.828        72\n",
+            "           N      0.912     0.897     0.905       486\n",
+            "           O      0.804     0.807     0.805       259\n",
+            "           ~      0.724     0.600     0.656        35\n",
+            "\n",
+            "    accuracy                          0.858       852\n",
+            "   macro avg      0.801     0.802     0.799       852\n",
+            "weighted avg      0.859     0.858     0.858       852\n",
+            "\n",
+            "CINC Average 0.845995\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import math"
+      ],
+      "metadata": {
+        "id": "XTQ6gOuT9c2Q"
+      },
+      "execution_count": 51,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "def stats(ground_truth, preds):\n",
+        "    labels = range(ground_truth.shape[2])\n",
+        "    g = np.argmax(ground_truth, axis=2).ravel()\n",
+        "    p = np.argmax(preds, axis=2).ravel()\n",
+        "    stat_dict = {}\n",
+        "    for i in labels:\n",
+        "        # compute all the stats for each label\n",
+        "        tp = np.sum(g[g==i] == p[g==i])\n",
+        "        fp = np.sum(g[p==i] != p[p==i])\n",
+        "        fn = np.sum(g==i) - tp\n",
+        "        tn = np.sum(g!=i) - fp\n",
+        "        stat_dict[i] = (tp, fp, fn, tn)\n",
+        "    return stat_dict\n",
+        "\n",
+        "def to_set(preds):\n",
+        "    idxs = np.argmax(preds, axis=2)\n",
+        "    return [list(set(r)) for r in idxs]\n",
+        "\n",
+        "def set_stats(ground_truth, preds):\n",
+        "    labels = range(ground_truth.shape[2])\n",
+        "    ground_truth = to_set(ground_truth)\n",
+        "    preds = to_set(preds)\n",
+        "    stat_dict = {}\n",
+        "    for x in labels:\n",
+        "        tp = 0; fp = 0; fn = 0; tn = 0;\n",
+        "        for g, p in zip(ground_truth, preds):\n",
+        "            if x in g and x in p: # tp\n",
+        "                tp += 1\n",
+        "            if x not in g and x in p: # fp\n",
+        "                fp += 1\n",
+        "            if x in g and x not in p:\n",
+        "                fn += 1\n",
+        "            if x not in g and x not in p:\n",
+        "                tn += 1\n",
+        "        stat_dict[x] = (tp, fp, fn, tn)\n",
+        "    return stat_dict\n",
+        "\n",
+        "def compute_f1(tp, fp, fn, tn):\n",
+        "    precision = tp / float(tp + fp)\n",
+        "    recall = tp / float(tp + fn)\n",
+        "    specificity = tn / float(tn + fp)\n",
+        "    npv = tn / float(tn + fn)\n",
+        "    f1 = 2 * precision * recall / (precision + recall)\n",
+        "    return f1, tp + fn\n",
+        "\n",
+        "def print_results(seq_sd, set_sd):\n",
+        "    print(\"\\t\\t Seq F1    Set F1\")\n",
+        "    seq_tf1 = 0; seq_tot = 0\n",
+        "    set_tf1 = 0; set_tot = 0\n",
+        "    for k, v in seq_sd.items():\n",
+        "        set_f1, n = compute_f1(*set_sd[k])\n",
+        "        set_tf1 += n * set_f1\n",
+        "        set_tot += n\n",
+        "        seq_f1, n = compute_f1(*v)\n",
+        "        seq_tf1 += n * seq_f1\n",
+        "        seq_tot += n\n",
+        "        print(\"{:>10} {:10.3f} {:10.3f}\".format(\n",
+        "            preproc.classes[k], seq_f1, set_f1))\n",
+        "    print(\"{:>10} {:10.3f} {:10.3f}\".format(\n",
+        "        \"Average\", seq_tf1 / float(seq_tot), set_tf1 / float(set_tot)))\n",
+        "\n",
+        "def c_statistic_with_95p_confidence_interval(cstat, num_positives, num_negatives, z_alpha_2=1.96):\n",
+        "    \"\"\"\n",
+        "    Calculates the confidence interval of an ROC curve (c-statistic), using the method described\n",
+        "    under \"Confidence Interval for AUC\" here:\n",
+        "      https://ncss-wpengine.netdna-ssl.com/wp-content/themes/ncss/pdf/Procedures/PASS/Confidence_Intervals_for_the_Area_Under_an_ROC_Curve.pdf\n",
+        "    Args:\n",
+        "        cstat: the c-statistic (equivalent to area under the ROC curve)\n",
+        "        num_positives: number of positive examples in the set.\n",
+        "        num_negatives: number of negative examples in the set.\n",
+        "        z_alpha_2 (optional): the critical value for an N% confidence interval, e.g., 1.96 for 95%,\n",
+        "            2.326 for 98%, 2.576 for 99%, etc.\n",
+        "    Returns:\n",
+        "        The 95% confidence interval half-width, e.g., the Y in X ± Y.\n",
+        "    \"\"\"\n",
+        "    q1 = cstat / (2 - cstat)\n",
+        "    q2 = 2 * cstat**2 / (1 + cstat)\n",
+        "    numerator = cstat * (1 - cstat) \\\n",
+        "        + (num_positives - 1) * (q1 - cstat**2) \\\n",
+        "        + (num_negatives - 1) * (q2 - cstat**2)\n",
+        "    standard_error_auc = math.sqrt(numerator / (num_positives * num_negatives))\n",
+        "    return z_alpha_2 * standard_error_auc\n",
+        "\n",
+        "def roc_auc(ground_truth, probs, index):\n",
+        "    gts = np.argmax(ground_truth, axis=2)\n",
+        "    n_gts = np.zeros_like(gts)\n",
+        "    n_gts[gts==index] = 1\n",
+        "    n_pos = np.sum(n_gts == 1)\n",
+        "    n_neg = n_gts.size - n_pos\n",
+        "    n_ps = probs[..., index].squeeze()\n",
+        "    n_gts, n_ps = n_gts.ravel(), n_ps.ravel()\n",
+        "    return n_pos, n_neg, skm.roc_auc_score(n_gts, n_ps)\n",
+        "\n",
+        "def roc_auc_set(ground_truth, probs, index):\n",
+        "    gts = np.argmax(ground_truth, axis=2)\n",
+        "    max_ps = np.max(probs[...,index], axis=1)\n",
+        "    max_gts = np.any(gts==index, axis=1)\n",
+        "    pos = np.sum(max_gts)\n",
+        "    neg = max_gts.size - pos\n",
+        "    return pos, neg, skm.roc_auc_score(max_gts, max_ps)\n",
+        "\n",
+        "def print_aucs(ground_truth, probs):\n",
+        "    seq_tauc = 0.0; seq_tot = 0.0\n",
+        "    set_tauc = 0.0; set_tot = 0.0\n",
+        "    print(\"\\t        AUC\")\n",
+        "    for idx, cname in preproc.int_to_class.items():\n",
+        "        pos, neg, seq_auc = roc_auc(ground_truth, probs, idx)\n",
+        "        seq_tot += pos\n",
+        "        seq_tauc += pos * seq_auc\n",
+        "        seq_conf = c_statistic_with_95p_confidence_interval(seq_auc, pos, neg)\n",
+        "        pos, neg, set_auc = roc_auc_set(ground_truth, probs, idx)\n",
+        "        set_tot += pos\n",
+        "        set_tauc += pos * set_auc\n",
+        "        set_conf = c_statistic_with_95p_confidence_interval(set_auc, pos, neg)\n",
+        "        print(\"{: <8}\\t{:.3f} ({:.3f}-{:.3f})\\t{:.3f} ({:.3f}-{:.3f})\".format(\n",
+        "            cname, seq_auc, seq_auc-seq_conf,seq_auc+seq_conf,\n",
+        "            set_auc, set_auc-set_conf, set_auc+set_conf))\n",
+        "    print(\"Average\\t\\t{:.3f}\\t{:.3f}\".format(seq_tauc/seq_tot, set_tauc/set_tot))"
+      ],
+      "metadata": {
+        "id": "tlDfIb_S6DHm"
+      },
+      "execution_count": 47,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "dataset = load.load_dataset(valid_data)\n",
+        "ecgs, labels = preproc.process(*dataset)\n",
+        "probs = model.predict(ecgs, verbose=1)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "0BcTBXWu9EBj",
+        "outputId": "eea1ba3e-8c65-40d9-dfbe-632848926ca1"
+      },
+      "execution_count": 49,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "100%|██████████| 852/852 [00:00<00:00, 6206.28it/s]\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "27/27 [==============================] - 2s 58ms/step\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print_results(stats(labels, probs), set_stats(labels, probs))\n",
+        "print_aucs(labels, probs)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "TOQLYgE78dcd",
+        "outputId": "7bc7d978-cc58-4f58-b1fd-763ceb2e7149"
+      },
+      "execution_count": 52,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\t\t Seq F1    Set F1\n",
+            "         A      0.806      0.800\n",
+            "         N      0.899      0.887\n",
+            "         O      0.788      0.781\n",
+            "         ~      0.979      0.990\n",
+            "   Average      0.914      0.919\n",
+            "\t        AUC\n",
+            "A       \t0.982 (0.979-0.986)\t0.986 (0.967-1.005)\n",
+            "N       \t0.979 (0.978-0.981)\t0.935 (0.918-0.951)\n",
+            "O       \t0.921 (0.917-0.925)\t0.928 (0.905-0.950)\n",
+            "~       \t0.998 (0.998-0.999)\t1.000 (1.000-1.000)\n",
+            "Average\t\t0.979\t0.969\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Model test stats"
+      ],
+      "metadata": {
+        "id": "b3MlbBlN_Mu3"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import matplotlib.pyplot as plt\n",
+        "import matplotlib\n",
+        "import sklearn"
+      ],
+      "metadata": {
+        "id": "Vh4HjWZg-hlD"
+      },
+      "execution_count": 55,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "def plot_confusions(cm, xlabel, filename):\n",
+        "    cm = sklearn.preprocessing.normalize(cm, norm='l1', axis=1, copy=True)\n",
+        "    classes = preproc.classes\n",
+        "    matplotlib.rcParams['figure.figsize'] = (8, 7)\n",
+        "    plt.pcolor(np.flipud(cm), cmap=\"Blues\")\n",
+        "    cbar = plt.colorbar()\n",
+        "    cbar.ax.tick_params(labelsize=16)\n",
+        "    tick_marks = np.arange(len(classes))\n",
+        "    plt.xticks(tick_marks + .5, classes, rotation=90, fontsize=16)\n",
+        "    plt.yticks(tick_marks + .5, reversed(classes), fontsize=16)\n",
+        "    plt.clim(0, 1)\n",
+        "    plt.ylabel(\"Committee consensus label\", fontsize=16)\n",
+        "    plt.xlabel(xlabel, fontsize=16)\n",
+        "    plt.tight_layout()\n",
+        "    plt.savefig(filename,\n",
+        "                dpi=400,\n",
+        "                format='pdf',\n",
+        "                bbox_inches='tight')"
+      ],
+      "metadata": {
+        "id": "_CyCy7Gf-gJ0"
+      },
+      "execution_count": 56,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "cm = skm.confusion_matrix(np.argmax(labels, axis=2).ravel(),\n",
+        "                      np.argmax(probs, axis=2).ravel())\n",
+        "plot_confusions(cm, \"DNN predicted label\", \"model_confusions.pdf\")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 707
+        },
+        "id": "a8Ee91S3-qtM",
+        "outputId": "db9de215-8704-408f-dd86-7ff3861191d7"
+      },
+      "execution_count": 57,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<Figure size 800x700 with 2 Axes>"
+            ],
+            "image/png": "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06dPV1JSkiZOnOi0YAEAAACkzVJif+7cOQUHB6e49/PPPytfvnx699135efnp2effVY1atTQxo0bnRIoAAAA7IWKvXNZSuxjYmLk7++f4t7mzZsVGhqqYsWKOe5VrFhRp06dyl6EAAAAAG7LUmLv5+eXImE/cOCA/vzzTzVs2DBVW7t/MgIAAAByAkuJfWhoqDZs2KDff/9dkjRlyhQZhqHGjRunaBcREaG77747+1ECAADAdpL3sXflZWeWEvt//etfunnzpmrVqqUaNWroww8/VPHixfX444872sTGxmrXrl2qUqVKtgIsV66cY07Ud999l2675s2byzAMttgEAABAnmQpsX/mmWc0YsQIJSQkaPfu3Spbtqzmzp0rLy8vR5tvv/1WN2/eTFXFz44333xTCQkJTusPAAAA7sPiWeeyfPLs22+/rUuXLun8+fM6evSoGjVqlOL5I488op07d6pHjx7ZDlKSChUqpMOHD+vLL790Sn8AAACAnVhO7CWpQIECCgwMTPNZcHCwqlevLl9f3+wM4dCvXz9J0qhRoxQXF+eUPgEAAOA+zLF3rmwl9q7UqlUrNW7cWGfOnNGHH37o7nAAAACAHMXTyot69uyZ6baGYWjKlClWhknlvffeU/369TVu3Di99NJLKfbMBwAAAPIyS4n97XaeSV6YYJqmUxP7evXqqV27dpo3b57+7//+T//+97+d0i8AAABcz9ULWu2+eNZSYv/VV1+leT8pKUnHjx/XkiVLtG3bNr366quqXr16tgL8u9GjR2vRokWaPHmy+vXrp7Jly2b6tfHx8YqPj3d8HRMT49TYAAAAAHexlNh369Ytw+cjRozQoEGD9MUXX2jHjh2WAktPpUqV1LNnT33++ecaNmyYpk+fnunXjhkzRiNHjnRqPAAAALDGkGsXtNq7Xn8HF8+OHj1ahQsX1ttvv+30vkeMGKFChQpp5syZ2rNnT6ZfN3ToUEVHRzuuyMhIp8cGAAAAuMMdS+w9PT1Vs2ZNrVixwul933333erXr5+SkpI0dOjQTL/Oy8tLfn5+KS4AAAC4h4dhuPyyszu63eW1a9d06dKlO9L34MGDVaxYMS1ZskRr1669I2MAAAAAucUdS+wPHDigdevWKSgo6I707+/vrzfeeEOSNGjQoDsyBgAAAJBbWFo8m9GC1djYWB04cEDffPONrl+/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AHALD+PW5crx7IyKPQAAAGADVOwBAADgFoYhl253affFs05J7H///XdduHBBxYoV03333eeMLgEAAABkgeWpOImJiXr33XdVsmRJVapUSY0aNdLYsWMdz2fOnKmGDRtq3759TgkUAAAA9pK83aUrLzuzlNgnJibqiSee0PDhw3Xp0iVVrlxZpmmmaBMWFqZNmzZp3rx5TgkUAAAAQPosJfaffvqpli1bpocfflgRERHau3dvqjblypVThQoVtHz58mwHCQAAACBjlubYf/311woICNDcuXNVtGjRdNtVrlxZu3fvthwcAAAA7IvtLp3LUsX+4MGDqlu3boZJvST5+/vr/PnzlgIDAAAAkHmWKvaJiYny8vK6bbszZ85kqh0AAADyHuO/f1w5np1ZqtiXLVtWe/bsybDNzZs3tXfvXlWsWNFSYAAAAAAyz1Ji36JFCx07dkyff/55um0mTpyoCxcu6PHHH7ccHAAAAOwreY69Ky87szQVZ+DAgZo2bZp69eql/fv3q3379pKkq1evaseOHfr222/173//W4GBgerdu7dTAwYAAACQmqWK/d13360FCxaoSJEimjBhgh588EEZhqHvvvtOderU0bhx4+Tr66vvv/9egYGBzo4ZAAAAwN9YPnn2oYce0r59+zRo0CA98MAD8vb2lpeXl+6991717dtXv/32mxo1auTMWAEAAGAjTMVxLktTcZKVKFFCY8eO1dixY50VDwAAAAALspXYAwAAAFYZhiHDcOF2ly4cyx2yldibpqmffvpJGzZs0IULF1SvXj317NlTknThwgVdunRJFSpUUL58+ZwSLAAAAIC0WU7sd+/erQ4dOujIkSMyTVOGYejmzZuOxP7nn39Wly5dtGDBArVu3dppAQMAAABIzdLi2ZMnT6p58+Y6fPiwWrZsqXHjxsk0zRRt2rZtq/z582vhwoVOCRQAAAD2wuJZ57KU2I8ePVpRUVH66KOP9MMPP2jAgAGp2hQqVEjVq1fX1q1bsx0kAAAAgIxZSuyXLl2qkJAQ9e3bN8N25cqV05kzZywFBgAAAHszDNdfdmYpsT99+rSqVq1623aGYSgmJsbKEAAAAACywNLiWR8fH124cOG27SIiIhQQEGBlCAAAANich2HIw4VldFeO5Q6WKvZVq1bV9u3bdfHixXTbHD9+XLt371atWrUsBwcAAADkBHPnzlWTJk1UtGhR+fj4qHr16ho3bpxu3ryZ7b6XLFni2NO/efPmlvuxlNg/++yzio2N1fPPP6+4uLhUz2/cuKFevXrp5s2bevbZZy0HBwAAALjbq6++qvbt22v9+vWqW7euWrRooRMnTmjw4MFq2rSprl27ZrnvS5cu6YUXXnDK4VmWEvsePXqocePGWrRokUJCQvTiiy9KurW3fd++fXXffffpp59+UrNmzdShQ4dsBwkAAAD7yQ3bXS5YsEDh4eHy9fXV5s2btWzZMn3//fc6cuSIqlatqnXr1mnYsGGWvwd9+vTRuXPn9NJLL1nuI5mlxD5fvnxavHixOnXqpFOnTunLL7+UJO3cuVOTJk3SiRMn9PTTT2vevHnZDhAAAABwl9GjR0uShgwZopo1azruBwYGavLkyZKkSZMmKTo6Ost9z58/XzNnztTrr7+uunXrZjtWyyfP+vr6aubMmRo2bJiWLFmio0ePKikpSUFBQWrZsqVCQ0OzHRwAAABszNVbUGZxrFOnTjnOZOrcuXOq540aNVJQUJAiIyO1ZMkSderUKdN9X7x4US+99JIqVaqkUaNGafbs2VkLLg2WE/tkISEhCgkJyXYgAAAAQE6yc+dOSVJAQIDKly+fZpvatWsrMjJSO3fuzFJi//LLL+vixYuaN2+eChYs6JR4LU3F6dmzp6ZOnXrbdtOmTVPPnj2tDAEAAACb85Dh8isrIiIiJEnBwcHptgkKCkrRNjNmz56t7777Tn369FFYWFiWYsqIpcR+2rRpWrdu3W3brV+/Xl9//bWVIQAAAIA7IiYmJsUVHx+fZrvY2FhJt85wSo+vr6+jz8w4e/asXnnlFVWoUMExf99ZLCX2mZWYmCgPjzs6BAAAAJAlQUFB8vf3d1xjxoxx2dgvvviiLl26pC+//FKFChVyat/ZnmOfkSNHjsjf3/9ODgEAAIBcynDx4tnksSIjI+Xn5+e47+XllWb7woULS5KuXr2abp9XrlyRpBT9pefrr7/W4sWL9fLLL6tJkyaZjDrzMp3Yjxo1KsXXu3btSnUvWUJCgvbt26cNGzZk6/QsAAAAwNn8/PwylYiXK1dO0q0PAulJfpbcNiPz58+XJG3dujVVYn/27FlJ0vbt2x3PZs+erZIlS96232SZTuxHjBghwzBkmqakW4n9rl27MnyNj4+P3n777UwHAwAAgLzD6qFR2RkvK2rUqCFJioqKUkRERJo742zbtk2SUuxxfzvJr0nL5cuXtWbNGknS9evXsxJu5hP7t99+25HYjxo1SqGhoXryySfTbFugQAGVKVNGjz32mIoXL56lgAAAAICcoEyZMqpTp462bt2qWbNm6c0330zxfN26dYqMjJSXl5datWp12/4WLFiQ7rNp06apR48eatasmVasWGEp3ixV7JMlJ/bDhw+3NCgAAACQG7zxxht66qmnNHbsWLVs2dJRmY+KilKvXr0kSb17906xrnT+/PkaOnSoSpcurZUrV7osVkuLZ5OSkpwdBwAAAPIYD8OQhwtXz1oZq23bturbt68mTJig+vXrq1mzZvLx8dHKlSt1+fJlhYWF6Z133knxmujoaB06dCjLU2myy9JelPfcc48GDx5823ZDhw5VhQoVrAyRgmmamjNnjtq1a6egoCAVLFhQRYsWVWhoqAYNGqQTJ05kewwAAAAgLeHh4ZozZ44aNGigDRs2aMmSJSpTpozGjh2rVatWydvb290hSrJYsT927JguXLhw23YXL17UsWPHrAzhcPr0aT311FPasmWLDMNQrVq1FBYWpri4OG3cuFHvv/++JkyYoPHjx+uVV17J1lgAAABwHXdtd2lF+/bt1b59+0y17d69u7p3756l/q285u/u6D72169fl6en9SEuXbqkBx98UEePHlWNGjX0zTff6IEHHnA8T0hIUHh4uAYPHqzevXsrMTFRffv2dUboAAAAQK5yx46FTUxM1LZt23TXXXdZ7qN37946evSoypcvr1WrVqVI6iXJ09NT/fv3V3h4uCRpwIABOnDgQLbiBgAAgGt4yHDMs3fJJRf+esANMl1Ob9q0aYqvly5dmupesoSEBB05ckTnz59X586dLQV29OhRzZ49W5L0wQcfqEiRIum27dWrl7744gvt3r1b48aN01dffWVpTAAAACC3ynRiv3r1asffDcPQ2bNnHSdkpad27doaM2aMpcAWL16spKQkFSlSRG3atMmwrWEY6tKli3bv3q3FixfLNE0ZrpywBQAAALhZphP7X375RdKtHWqaNm2qFi1apLszTvIBVUFBQZYD2759u6RbJ35lZp5+nTp1JN3aU/TYsWNpngwGAACAnCM3LZ7NDTKd2Ddu3DjF35s0aZLinrMl77pTokSJTLX/a7sLFy6kmdjHx8crPj7e8XVMTEw2owQAAAByBktb1iRX73MS0zRv22bMmDEaOXKkC6IBAADA7XjoDu7kks54dpZj319gYKAk6dy5c5lqf/78ecff09uJZ+jQoYqOjnZckZGR2Q8UAAAAyAEyVbEfNWqUpFvbTwYEBDi+zgzDMDRs2LAsB1arVi3NmDFDO3bsUEJCwm3n2W/ZskWSVKxYMZUrVy7NNl5eXvLy8spyLAAAAHA+wzBcuuGJ3TdXyVRiP2LECBmGoY4dOyogIMDxdUbTX5KfW03sW7durf79+ys6OloLFy7U008/nW5b0zT1zTffSJKeeOIJ2/9DAwAAAP4uU4n922+/LcMwHNNjkr++kypUqKD27dtr9uzZGjhwoJo1a5buXvaTJ0/Wnj175OnpqYEDB97RuAAAAICcKNMV+4y+vlM+/vhjbdq0SREREWratKm++eabFKfPJiQkaMKECRo0aJAk6b333kt1Oi0AAAByJuO/lyvHszNLu+K4SkBAgNatW6e2bdtq27Ztqlq1qmrXrq0KFSooLi5OGzdu1IULF1SgQAGNHz9e/fr1c3fIAAAAgFvk6MRekkqXLq3Nmzfr22+/1ezZs7V161bt3r1bBQsWVNmyZdW1a1f17t073QWzAAAAyJk8DEMeLlwb6cqx3CFbif3Jkye1evVqnT59WtevX0+zjdXFs3/l4eGhjh07qmPHjtnqBwAAALArS4l9YmKi+vbtq88//1xJSUmSUh8Qld1dcQAAAABknqXE/t1339Unn3wiT09PPfHEE6pYsaIKFy7s7NgAAABgc/aeHONalhL7adOmydvbW7/++qtq1qzp7JgAAAAAZJGlxP7s2bNq0qQJST0AAAAsM4xblyvHszMPKy8qVaoUU28AAACAHMRSYv/UU09p7dq1io+Pd3Y8AAAAyCMMw3D5ZWeWEvu3335bRYoUUceOHXXx4kVnxwQAAAAgiyzNsffz89PGjRvVpEkTVahQQbVq1VJwcLA8PFJ/TjAMQ1OmTMl2oAAAAADSZymxj4+PV/fu3bV3716ZpqnVq1en25bEHgAAAGnxkMXpI9kYz84sJfbDhw/X4sWLVbRoUXXp0kUVK1aUr6+vs2MDAAAAkEmWEvv//Oc/KlKkiHbt2qWgoCBnxwQAAIA8wNULWlk8m4bz58/rwQcfJKkHAAAAcghLFfv0FsoCAAAAmWX893LleHZmKTvv3LmzVq9ercuXLzs5HAAAAABWWErshw4dqtDQULVq1UoHDhxwdkwAAAAAssjSVJwWLVro5s2b2rRpk6pWrarg4OAM97FfuXJltgMFAACAvbB41rksJfZ/3bc+KSlJx44d07Fjx9Jsa/dvIAAAAJATWErsf/nlF2fHAQAAgDyGA6qcy1Ji37hxY2fHAQAAACAb7P7BBQAAAMgTLFXsAQAAgOxi8axzWU7so6OjNXnyZK1cuVKnT5/W9evX02xnGIb++OMPywECAAAAuD1Lif3Ro0fVuHFjnT59WqZpZtjW7p+MAAAAYA0nzzqXpcR+4MCBOnXqlBo2bKj+/furYsWKKly4sLNjAwAAAJBJlhL7VatWKTg4WCtWrFDBggWdHRMAAADyAMO4dblyPDuztCtOYmKi6tWrR1IPAAAA5BCWEvsqVarozz//dHYsAAAAACyylNj37t1ba9eu1d69e50dDwAAAPIIDxkuv+zMUmLfuXNn9evXT02bNtVnn32mEydOODsuAAAAAFlgeR/7l156SUuXLlWvXr0ybGcYhhISEqwOAwAAAJti8axzWUrs9+7dq8aNG+vy5cu33cf+ds8BAAAAZJ+lqThDhw7VpUuX9I9//EM7duxQbGyskpKS0r0AAACAvzPc8MfOLFXs169fr0qVKmn27NmcLAsAAADkAJYq9klJSQoNDSWpBwAAAHIISxX7GjVq6NSpU86OBQAAAHkIi2edy1LFftCgQVq/fr1Wr17t5HAAAAAAWGGpYv/AAw9o8ODBatWqlfr166eWLVsqODhYHh5pf04IDg7OVpAAAACwH8PFh0axeDYN5cqVk2EYMk1T48aN07hx49Jtyz72AAAAwJ1nKbEPDg5m4SwAAACQg1hK7I8dO+bkMAAAAJDXsHjWuSwtngUAAACQs1iq2AMAAADZRcXeubKV2EdFRemLL77QL7/84tjXvnTp0mratKmef/55FStWzClBAgAAAMiY5cR++fLl6tSpky5fvizTNB339+/frxUrVuj999/XrFmz9OijjzolUAAAANiL8d8/rhzPziwl9keOHFG7du0UFxenatWqqUePHqpQoYIk6ejRo5o2bZp27dqldu3aaefOnapYsaJTgwYAAACQkqXEfuzYsYqLi9OIESP09ttvp3ret29fvfPOOxo+fLjee+89ffnll9kO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kiVL3B0K4BYk9gCyrFy5ctnatjIiIsKJ0SC3uXz5sl555RXNmTNHSUlJkuT4eUr+T5KHh4fat2+vjz/+WEWLFnVbrMhdunTpooULF+rs2bOWdmACcjsSewCAW0RERGjx4sXavn27Lly4IEkKDAxUrVq11Lp1a91zzz1ujhC5zfbt21W3bl2NHDlSb731lrvDAVyOxB4AANjG+PHjdeTIEX344Yfy9vZ2dziAS5HYAwAAADbAPvYAAACADZDYAwAAADZAYg8AAADYAIk9AAAAYAMk9kAulryffPLl4eGhwoULq0yZMnr44Yc1YMAAbdmyJcM+mjRp4nj9Bx98kG67559/XoZhaMSIESnur1692vH6kiVL6urVq2m+/uTJk452dnbs2DEZhqFy5cqlepbb339G7y0jyT+nx44dc1sMViX/fDdp0sQl4wFAdpDYAzYQFhambt26qWvXrmrVqpUqVaqk3bt3a/z48apXr56aNGmio0eP3rafMWPG6PLly5bjOHfunMaPH2/59cicESNGpPkhCwCQt5HYAzbw/PPPa9q0aZo2bZrmzJmjlStXKioqSj/++KMqVqyoNWvWqGHDhhme+FqoUCH9+eefGjt2rKUYvL29HVX/5MOGkNKBAwd04MABd4cBALApEnvApgzDUKtWrbRlyxZVrFhR586d0/PPP59u+z59+sjDw0MTJkzQ6dOnszxeqVKl9I9//EOxsbF69913sxO6bYWEhCgkJMTdYQAAbIrEHrC5IkWK6KOPPpIkrVq1Stu3b0+zXZUqVdSlSxddu3ZNw4cPtzTW//3f/8nT01Offvpphr8dyIrkNQCrV6/WmjVr9OijjyogIECFChVS3bp19c0336T5uu7du8swDE2bNk179+5Vhw4ddPfddytfvnwpprAkJCToyy+/VJMmTRQQECAvLy+VL19eL7/8siIjI9ON64cfflDjxo1VuHBh+fv768EHH9TChQszfC8ZzbFPSEjQ1KlT1bx5cwUGBsrLy0tlypRR8+bNNXHixBR9jBw5UpI0cuTIFGssunfvnqpPV703K44fP6733ntPTZs2VXBwsLy8vFSkSBE1atRIn332mZKSkjJ8fUJCgsaNG6cHHnhA3t7eCgwMVPv27XXw4MF0X3Pt2jWNHz9e9evXV5EiRVSwYEFVqlRJgwYNUlRUlLPfIgC4FIk9kAe0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f5feP++/SusD540bNzRnzhxJ/1tHIP3vezJ37txs/RYAAHIyEnvApkzT1E8//aS6devqyJEjuvvuu7OcXLdr10716tXTiRMnNG/evCzHYBiGxowZI0mOQ7Ks2r59u8aNG5fi3rp16/Txxx9LkuPDS2bVqFFDTz/9tCIjI9WuXbs0q9FXr17VzJkzde7cOce9Pn36KF++fPr22281f/78FO1nz56tBQsWZCmO0NBQPfnkk7p27ZqefPLJVPPNExIStGjRohT3kivR+/bty9HvLSOVK1eWJK1cuVL79+9P8ezzzz93JOcZeeedd7R3717H10lJSRo8eLBOnjypoKAgPf30045nTz75pOrUqaMtW7aoR48eac6jv3Tpkj799NN0PzABQI7nvg15AGRX8jaCYWFhZrdu3cxu3bqZHTt2NJs3b24GBAQ4tgVs0qSJefTo0TT7+Pt2l3+3evVqRz/K5HaXf9ekSZMUfWRFcnx9+/Y1PTw8zAceeMDs1KmT2bhxY9PDw8OUZPbr1y/V65K3u8xoK9CYmBizWbNmpiSzQIECZp06dcz27dubzzzzjFmnTh2zQIECpiTzwIEDKV43btw4x3upV6+e2blzZ7NOnTqmJPO1117L8j72f/75p1m/fn1HHE2aNDE7d+5sNm3a1LzrrrtSvebs2bOmj4+P45999+7dzeeee86cOnWq295bRtLb7jJ5+8wCBQqYjz76qNmxY0czJCTENAzDfPPNN9McK3m7y+DgYPOpp54y8+fPbz7yyCNmx44dzQoVKpiSTB8fH/PXX39NFcepU6fM0NBQR5uGDRuaHTt2NNu1a2eGhoaa+fLlMyWZ165dc7yG7S4B5CYk9kAulpww/fXy8fExS5UqZTZu3Njs37+/uWXLlgz7uF1ib5r/2/PcamK/efPmbCf2v/zyi7ly5UqzWbNmpr+/v+nt7W3Wrl3bnDZtWpqvy0xib5q39i+fNWuW2apVK7NEiRJm/vz5zWLFiplVqlQxe/ToYc6fP9+8ceNGqtctXLjQbNSokenj42P6+vqaDRs2NL/77jtH4pmVxN40TTM+Pt785JNPzAcffNAsUqSIWaBAAbNMmTLmI488Yn788cep2q9du9Zs3ry5WbRoUccHnG7durntvWUkvcT+xo0b5vvvv29WrVrVLFSokBkQEGA++uij5vLly9Md66/3b968af7f//2fGRISYnp5eZkBAQHm008/be7bty/dWK5fv25++umn5sMPP2wWK1bM9PT0NIsXL26Ghoaar7zyirls2bIU7UnsAeQmhmky2RBAztWkSROtWbNGv/zyS4o50wAAICXm2AMAAAA2QGIPAAAA2ACJPQAAAGADzLEHAAAAbICKPQAAAGADJPYAAACADZDYAwAAADZAYg8AAADYAIk9AAAAYAMk9gAAAIANkNgDAAAANkBiDwAAANgAiT0AAABgA/8PRlYMW1m+Q68AAAAASUVORK5CYII=\n"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "vt_class_idx = preproc.class_to_int[\"A\"]\n",
+        "vt_idx = np.where(np.any(np.argmax(labels, axis=2) == vt_class_idx, axis=1))[0]\n",
+        "\n",
+        "model_vt_idx = np.where(np.any(np.argmax(probs, axis=2) == vt_class_idx, axis=1))[0]"
+      ],
+      "metadata": {
+        "id": "z1KWnhFN-4_F"
+      },
+      "execution_count": 58,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "missed = list(set(model_vt_idx).difference(set(vt_idx)))\n",
+        "for m in missed:\n",
+        "    print(np.argmax(labels, axis=2)[m, :], np.argmax(probs,axis=2)[m,:])"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "lVSxj1yE-_rT",
+        "outputId": "f6e079a0-7e41-4170-e42c-58186705fbd4"
+      },
+      "execution_count": 59,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "[2 2 2 2 2 2 2 2 2 2 2 2 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 2 2 2 0 2 0 2 2 2 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [2 2 2 0 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 0 0 0 0 1 0 1 0 0 0 1 1 1 1 1 1 1 1 0 1 1 0 0 0 0 0 0 1 1 0 1 2 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 0 0 0 0 0 0 0 0 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 0 2 2 2 2 0 0 0 2 2 2 2 2 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1\n",
+            " 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 3] [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n",
+            " 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 3]\n",
+            "[3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 0 0 0 0 0 0 0 0 0 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 0 2 2 2 2 0 0 0 0 0 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 0 0 0 0 0 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [2 2 1 2 2 2 2 2 1 1 1 1 1 1 1 1 2 1 1 1 1 1 1 1 1 0 1 1 2 2 2 2 2 3 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [2 2 1 2 2 1 2 0 2 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [2 2 2 2 2 2 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2 2 2 2 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 0 0 2 2 0 0 0 0 0 0 0 0 0 0 2 2 2 0 0 0 0 0 0 0 0 2 2 2 2 0 0 2 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 0 0 0 0 0 0 0 0 0 0 0 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [2 2 2 2 2 2 2 2 2 2 2 2 0 0 0 0 0 0 0 2 0 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2 2 2 0 2 2 2 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2 0 0 2 0 2 2 2 2 2 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2 2 2 2 2 2 0 2 2 2 2 2 2 2 2 3 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [2 2 0 0 0 0 2 0 2 0 2 2 2 0 2 2 0 2 2 2 0 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2 2 0 0 0 2 2 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n",
+            "[1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3] [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2 0 2 3 3 3\n",
+            " 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# ROC and PR curves"
+      ],
+      "metadata": {
+        "id": "nW3UQ0QQ_ZuS"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from sklearn.metrics import roc_curve\n",
+        "from sklearn.metrics import roc_auc_score"
+      ],
+      "metadata": {
+        "id": "6FMxZ5moBJsK"
+      },
+      "execution_count": 62,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# calculate scores\n",
+        "ns_probs = [0 for _ in range(len(labels))]\n",
+        "ns_auc = roc_auc_score(labels, ns_probs)\n",
+        "\n",
+        "lr_auc = roc_auc_score(labels, probs)\n",
+        "# summarize scores\n",
+        "print('No Skill: ROC AUC=%.3f' % (ns_auc))\n",
+        "print('Logistic: ROC AUC=%.3f' % (lr_auc))\n",
+        "# calculate roc curves\n",
+        "ns_fpr, ns_tpr, _ = roc_curve(labels, ns_probs)\n",
+        "lr_fpr, lr_tpr, _ = roc_curve(labels, probs)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 397
+        },
+        "id": "q3Y8gZJy_W41",
+        "outputId": "de65e8cd-a706-471e-c6ec-481dafd955e3"
+      },
+      "execution_count": 63,
+      "outputs": [
+        {
+          "output_type": "error",
+          "ename": "ValueError",
+          "evalue": "ignored",
+          "traceback": [
+            "\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
+            "\u001b[0;31mValueError\u001b[0m                                Traceback (most recent call last)",
+            "\u001b[0;32m<ipython-input-63-bf22d0eab5b9>\u001b[0m in \u001b[0;36m<cell line: 3>\u001b[0;34m()\u001b[0m\n\u001b[1;32m      1\u001b[0m \u001b[0;31m# calculate scores\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m      2\u001b[0m \u001b[0mns_probs\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0;34m[\u001b[0m\u001b[0;36m0\u001b[0m \u001b[0;32mfor\u001b[0m \u001b[0m_\u001b[0m \u001b[0;32min\u001b[0m \u001b[0mrange\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mlen\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mlabels\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m]\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m----> 3\u001b[0;31m \u001b[0mns_auc\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mroc_auc_score\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mlabels\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mns_probs\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m      4\u001b[0m \u001b[0mlr_auc\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mroc_auc_score\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mlabels\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mprobs\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m      5\u001b[0m \u001b[0;31m# summarize scores\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/sklearn/metrics/_ranking.py\u001b[0m in \u001b[0;36mroc_auc_score\u001b[0;34m(y_true, y_score, average, sample_weight, max_fpr, multi_class, labels)\u001b[0m\n\u001b[1;32m    548\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    549\u001b[0m     \u001b[0my_type\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mtype_of_target\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0my_true\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0minput_name\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;34m\"y_true\"\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 550\u001b[0;31m     \u001b[0my_true\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mcheck_array\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0my_true\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mensure_2d\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;32mFalse\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mdtype\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;32mNone\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    551\u001b[0m     \u001b[0my_score\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mcheck_array\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0my_score\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mensure_2d\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;32mFalse\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    552\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/sklearn/utils/validation.py\u001b[0m in \u001b[0;36mcheck_array\u001b[0;34m(array, accept_sparse, accept_large_sparse, dtype, order, copy, force_all_finite, ensure_2d, allow_nd, ensure_min_samples, ensure_min_features, estimator, input_name)\u001b[0m\n\u001b[1;32m    913\u001b[0m             )\n\u001b[1;32m    914\u001b[0m         \u001b[0;32mif\u001b[0m \u001b[0;32mnot\u001b[0m \u001b[0mallow_nd\u001b[0m \u001b[0;32mand\u001b[0m \u001b[0marray\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mndim\u001b[0m \u001b[0;34m>=\u001b[0m \u001b[0;36m3\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 915\u001b[0;31m             raise ValueError(\n\u001b[0m\u001b[1;32m    916\u001b[0m                 \u001b[0;34m\"Found array with dim %d. %s expected <= 2.\"\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    917\u001b[0m                 \u001b[0;34m%\u001b[0m \u001b[0;34m(\u001b[0m\u001b[0marray\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mndim\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mestimator_name\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;31mValueError\u001b[0m: Found array with dim 3. None expected <= 2."
+          ]
+        }
+      ]
+    }
+  ]
+}

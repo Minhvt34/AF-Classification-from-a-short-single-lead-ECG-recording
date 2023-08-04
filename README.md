@@ -4,18 +4,27 @@ This repos is to analysis Cardiologist-level arrhythmia based on paper source "C
 
 # The Physionet 2017 Challenge 
 
-Before following this guide first follow the setup instructions in the top-level
-[README](../../README.md).
-
 These instructions go through the training and evaluation of a model on the
 [Physionet 2017 challenge](https://www.physionet.org/challenge/2017/) dataset.
 
+Limitation: Due to restrictions apply to the availability of the training dataset, which was used under license from iRhythm Technologies, Inc.
+
 ## Data
 
-To download and build the datasets run:
+To access to all files data from the challenge:
+
+Access the files:
+
+[Physionet 2017 base source](https://www.physionet.org/content/challenge-2017/1.0.0/#files-panel) dataset
+
+Access the files using the Google Cloud Storage Browser here. Login with a Google account is required.
+Access the data using the Google Cloud command line tools (please refer to the gsutil documentation for guidance): gsutil -m -u YOUR_PROJECT_ID cp -r gs://challenge-2017-1.0.0.physionet.org DESTINATION
+Download the files using your terminal: wget -r -N -c -np https://physionet.org/files/challenge-2017/1.0.0/
+
+To build the datasets run:
 
 ```
-./setup.sh
+python ecg/examples/cinc17/buid_datasets.py -r "data_path"
 ```
 
 ## Training
@@ -28,28 +37,5 @@ python ecg/train.py examples/cinc17/config.json -e cinc17
 
 ## Evaluation
 
-The test dataset for the Physionet 2017 challenge is hidden and maintained by
-the challenge organizers. To evaluate on this dataset requires packaging and
-submitting the code, dependencies and model to a test server. In general you
-will need to be familiar with the instructions on the challenge
-[website](https://www.physionet.org/challenge/2017/), but we have included some
-scripts to make this as simple as possible.
-
-First change the file in `entry/AUTHORS.txt` to be your name and institution.
-
-Next, from the `entry` directory, run
-
-```
-./prepare-entry.sh <path_to_model>
-```
-
-The model path should be in
-`<path_to_repo>/ecg/saved/cinc17/<timestamp>/<best_model>.hdf5`. The dev set
-loss is the first number in the model file name, so the best model (as
-evaluated by dev set loss) is the model with the smallest first number in its
-name.
-
-Note that this script is quite slow since every time the model is run on a
-record it has to be reloaded. Once complete, a zip file should be created in
-`entry/entry/entry.zip`. This is the submission.
+Model performance will be evaluated using confusion matrix, AUC metric, ROC and PR curves.
 
